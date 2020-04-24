@@ -25,9 +25,6 @@
 #define lua_assert(c)           assert(c)
 
 
-/* include opcode names */
-#define LUAI_DEFOPNAMES
-
 
 /* compiled with -O0, Lua uses a lot of C stack space... */
 #undef LUAI_MAXCSTACK
@@ -61,7 +58,7 @@ typedef struct Memcontrol {
   unsigned long maxmem;
   unsigned long memlimit;
   unsigned long countlimit;
-  unsigned long objcount[LUA_NUMTAGS];
+  unsigned long objcount[LUA_NUMTYPES];
 } Memcontrol;
 
 LUA_API Memcontrol l_memcontrol;
