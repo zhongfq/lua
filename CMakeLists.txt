@@ -62,12 +62,6 @@ set(LUASRC
     lzio.h
 )
 
-if(MACOSX)
-    add_definitions(-DLUA_USE_MACOSX)
-elseif(LINUX)
-    add_definitions(-DLUA_USE_LINUX)
-endif()
-
 if(WIN32)
     add_library(liblua SHARED ${LUASRC})
     target_compile_definitions(liblua PRIVATE LUA_BUILD_AS_DLL)
@@ -76,6 +70,9 @@ else()
     target_link_libraries(liblua PUBLIC readline)
     if (NOT APPLE)
         target_link_libraries(liblua PUBLIC m dl)
+        target_compile_definitions(liblua PUBLIC LUA_USE_LINUX)
+    else()
+        target_compile_definitions(liblua PUBLIC LUA_USE_MACOSX)
     endif()
 endif()
 
