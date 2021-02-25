@@ -88,6 +88,11 @@ The type @emph{boolean} has two values, @false and @true.
 Both @nil and @false make a condition false;
 they are collectively called @def{false values}.
 Any other value makes a condition true.
+Despite its name,
+@false is frequently used as an alternative to @nil,
+with the key difference that @false behaves
+like a regular value in a table,
+while a @nil in a table represents an absent key.
 
 The type @emph{number} represents both
 integer numbers and real (floating-point) numbers,
@@ -1625,14 +1630,8 @@ they are closed in the reverse order that they were declared.
 If there is any error while running a closing method,
 that error is handled like an error in the regular code
 where the variable was defined.
-However, Lua may call the method one more time.
-
 After an error,
 the other pending closing methods will still be called.
-Errors in these methods
-interrupt the respective method and generate a warning,
-but are otherwise ignored;
-the error reported is only the original one.
 
 If a coroutine yields and is never resumed again,
 some variables may never go out of scope,
@@ -3096,6 +3095,21 @@ will probably need to close states as soon as they are not needed.
 
 }
 
+@APIEntry{void lua_closeslot (lua_State *L, int index);|
+@apii{0,0,e}
+
+Close the to-be-closed slot at the given index and set its value to @nil.
+The index must be the last index previously marked to be closed
+@see{lua_toclose} that is still active (that is, not closed yet).
+
+A @Lid{__close} metamethod cannot yield
+when called through this function.
+
+(Exceptionally, this function was introduced in release 5.4.3.
+It is not present in previous 5.4 releases.)
+
+}
+
 @APIEntry{int lua_compare (lua_State *L, int index1, int index2, int op);|
 @apii{0,0,e}
 
@@ -3748,9 +3762,7 @@ except that it allows the called function to yield @see{continuations}.
 @apii{n,0,e}
 
 Pops @id{n} elements from the stack.
-
-This function can run arbitrary code when removing an index
-marked as to-be-closed from the stack.
+It is implemented as a macro over @Lid{lua_settop}.
 
 }
 
@@ -4093,10 +4105,12 @@ and then pops the top element.
 Resets a thread, cleaning its call stack and closing all pending
 to-be-closed variables.
 Returns a status code:
-@Lid{LUA_OK} for no errors in closing methods,
+@Lid{LUA_OK} for no errors in the thread
+(either the original error that stopped the thread or
+errors in closing methods),
 or an error status otherwise.
 In case of error,
-leaves the error object on the top of the stack,
+leaves the error object on the top of the stack.
 
 }
 
@@ -4239,8 +4253,12 @@ If the new top is greater than the old one,
 then the new elements are filled with @nil.
 If @id{index} @N{is 0}, then all stack elements are removed.
 
-This function can run arbitrary code when removing an index
-marked as to-be-closed from the stack.
+For compatibility reasons,
+this function may close slots marked as to-be-closed @see{lua_toclose},
+and therefore it can run arbitrary code.
+You should not rely on this behavior:
+Instead, always close to-be-closed slots explicitly,
+with @Lid{lua_closeslot}, before removing them from the stack.
 
 }
 
@@ -4336,23 +4354,18 @@ when it goes out of scope.
 Here, in the context of a C function,
 to go out of scope means that the running function returns to Lua,
 there is an error,
-or the index is removed from the stack through
-@Lid{lua_settop} or @Lid{lua_pop}.
-An index marked as to-be-closed should not be removed from the stack
-by any other function in the API except @Lid{lua_settop} or @Lid{lua_pop}.
+or there is a call to @Lid{lua_closeslot}.
+An index marked as to-be-closed should neither be removed from the stack
+nor modified before a corresponding call to @Lid{lua_closeslot}.
 
 This function should not be called for an index
 that is equal to or below an active to-be-closed index.
-
-In the case of an out-of-memory error,
-the value in the given index is immediately closed,
-as if it was already marked.
 
 Note that, both in case of errors and of a regular return,
 by the time the @idx{__close} metamethod runs,
 the @N{C stack} was already unwound,
 so that any automatic @N{C variable} declared in the calling function
-will be out of scope.
+(e.g., a buffer) will be out of scope.
 
 }
 
@@ -6572,7 +6585,9 @@ that is,
 closes all its pending to-be-closed variables
 and puts the coroutine in a dead state.
 The given coroutine must be dead or suspended.
-In case of error closing some variable,
+In case of error
+(either the original error that stopped the coroutine or
+errors in closing methods),
 returns @false plus the error object;
 otherwise returns @true.
 
@@ -7805,19 +7820,19 @@ from @T{list[1]} to @T{list[#list]}.
 If @id{comp} is given,
 then it must be a function that receives two list elements
 and returns true when the first element must come
-before the second in the final order
-(so that, after the sort,
-@T{i < j} implies @T{not comp(list[j],list[i])}).
+before the second in the final order,
+so that, after the sort,
+@T{i <= j} implies @T{not comp(list[j],list[i])}.
 If @id{comp} is not given,
 then the standard Lua operator @T{<} is used instead.
 
-Note that the @id{comp} function must define
-a strict partial order over the elements in the list;
-that is, it must be asymmetric and transitive.
-Otherwise, no valid sort may be possible.
+The @id{comp} function must define a consistent order;
+more formally, the function must define a strict weak order.
+(A weak order is similar to a total order,
+but it can equate different elements for comparison purposes.)
 
 The sort algorithm is not stable:
-elements considered equal by the given order
+Different elements considered equal by the given order
 may have their relative positions changed by the sort.
 
 }

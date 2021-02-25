@@ -24,8 +24,9 @@ local function doit (s)
 end
 
 
-local function checkmessage (prog, msg)
+local function checkmessage (prog, msg, debug)
   local m = doit(prog)
+  if debug then print(m) end
   assert(string.find(m, msg, 1, true))
 end
 
@@ -67,6 +68,27 @@ checksyntax([[
 ]], "'}' expected (to close '{' at line 1)", "<eof>", 3)
 
 
+do   -- testing errors in goto/break
+  local function checksyntax (prog, msg, line)
+    local st, err = load(prog)
+    assert(string.find(err, "line " .. line))
+    assert(string.find(err, msg, 1, true))
+  end
+
+  checksyntax([[
+    ::A:: a = 1
+    ::A::
+  ]], "label 'A' already defined", 1)
+
+  checksyntax([[
+    a = 1
+    goto A
+    do ::A:: end
+  ]], "no visible label 'A'", 2)
+
+end
+
+
 if not T then
   (Message or print)
     ('\n >>> testC not active: skipping memory message test <<<\n')
@@ -98,6 +120,17 @@ checkmessage("local a={}; a.bbbb(3)", "field 'bbbb'")
 assert(not string.find(doit"a={13}; local bbbb=1; a[bbbb](3)", "'bbbb'"))
 checkmessage("a={13}; local bbbb=1; a[bbbb](3)", "number")
 checkmessage("a=(1)..{}", "a table value")
+
+-- calls
+checkmessage("local a; a(13)", "local 'a'")
+checkmessage([[
+  local a = setmetatable({}, {__add = 34})
+  a = a + 1
+]], "metamethod 'add'")
+checkmessage([[
+  local a = setmetatable({}, {__lt = {}})
+  a = a > a
+]], "metamethod 'lt'")
 
 -- tail calls
 checkmessage("local a={}; return a.bbbb(3)", "field 'bbbb'")
