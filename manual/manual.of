@@ -331,7 +331,7 @@ under certain events.
 You can change several aspects of the behavior
 of a value by setting specific fields in its metatable.
 For instance, when a non-numeric value is the operand of an addition,
-Lua checks for a function in the field @St{__add} of the value's metatable.
+Lua checks for a function in the field @idx{__add} of the value's metatable.
 If it finds one,
 Lua calls this function to perform the addition.
 
@@ -344,7 +344,7 @@ In the previous example, the key is the string @St{__add}
 and the metamethod is the function that performs the addition.
 Unless stated otherwise,
 a metamethod may in fact be any @x{callable value},
-which is either a function or a value with a @id{__call} metamethod.
+which is either a function or a value with a @idx{__call} metamethod.
 
 You can query the metatable of any value
 using the @Lid{getmetatable} function.
@@ -505,7 +505,7 @@ when @id{key} is not present in @id{table}.
 The metavalue is looked up in the metatable of @id{table}.
 
 The metavalue for this event can be either a function, a table,
-or any value with an @id{__index} metavalue.
+or any value with an @idx{__index} metavalue.
 If it is a function,
 it is called with @id{table} and @id{key} as arguments,
 and the result of the call
@@ -514,7 +514,7 @@ is the result of the operation.
 Otherwise,
 the final result is the result of indexing this metavalue with @id{key}.
 This indexing is regular, not raw,
-and therefore can trigger another @id{__index} metavalue.
+and therefore can trigger another @idx{__index} metavalue.
 }
 
 @item{@idx{__newindex}|
@@ -526,14 +526,14 @@ The metavalue is looked up in the metatable of @id{table}.
 
 Like with indexing,
 the metavalue for this event can be either a function, a table,
-or any value with an @id{__newindex} metavalue.
+or any value with an @idx{__newindex} metavalue.
 If it is a function,
 it is called with @id{table}, @id{key}, and @id{value} as arguments.
 Otherwise,
 Lua repeats the indexing assignment over this metavalue
 with the same key and value.
 This assignment is regular, not raw,
-and therefore can trigger another @id{__newindex} metavalue.
+and therefore can trigger another @idx{__newindex} metavalue.
 
 Whenever a @idx{__newindex} metavalue is invoked,
 Lua does not perform the primitive assignment.
@@ -742,7 +742,7 @@ For an object (table or userdata) to be finalized when collected,
 you must @emph{mark} it for finalization.
 @index{mark (for finalization)}
 You mark an object for finalization when you set its metatable
-and the metatable has a field indexed by the string @St{__gc}.
+and the metatable has a @idx{__gc} metamethod.
 Note that if you set a metatable without a @idx{__gc} field
 and later create that field in the metatable,
 the object will not be marked for finalization.
@@ -787,11 +787,8 @@ following the reverse order that they were marked.
 If any finalizer marks objects for collection during that phase,
 these marks have no effect.
 
-Finalizers cannot yield.
-Except for that, they can do anything,
-such as raise errors, create new objects,
-or even run the garbage collector.
-However, because they can run in unpredictable times,
+Finalizers cannot yield nor run the garbage collector.
+Because they can run in unpredictable times,
 it is good practice to restrict each finalizer
 to the minimum necessary to properly release
 its associated resource.
@@ -1346,8 +1343,10 @@ then all values returned by that call enter the list of values,
 before the adjustment
 (except when the call is enclosed in parentheses; see @See{expressions}).
 
-The assignment statement first evaluates all its expressions
-and only then the assignments are performed.
+If a variable is both assigned and read
+inside a multiple assignment,
+Lua ensures all reads get the value of the variable
+before the assignment.
 Thus the code
 @verbatim{
 i = 3
@@ -1366,6 +1365,12 @@ and
 x, y, z = y, z, x
 }
 cyclically permutes the values of @id{x}, @id{y}, and @id{z}.
+
+Note that this guarantee covers only accesses
+syntactically inside the assignment statement.
+If a function or a metamethod called during the assignment
+changes the value of a variable,
+Lua gives no guarantees about the order of that access.
 
 An assignment to a global name @T{x = val}
 is equivalent to the assignment
@@ -3102,7 +3107,7 @@ Close the to-be-closed slot at the given index and set its value to @nil.
 The index must be the last index previously marked to be closed
 @see{lua_toclose} that is still active (that is, not closed yet).
 
-A @Lid{__close} metamethod cannot yield
+A @idx{__close} metamethod cannot yield
 when called through this function.
 
 (Exceptionally, this function was introduced in release 5.4.3.
@@ -3267,6 +3272,8 @@ Returns the previous mode (@id{LUA_GCGEN} or @id{LUA_GCINC}).
 }
 For more details about these options,
 see @Lid{collectgarbage}.
+
+This function should not be called by a finalizer.
 
 }
 
@@ -4253,12 +4260,8 @@ If the new top is greater than the old one,
 then the new elements are filled with @nil.
 If @id{index} @N{is 0}, then all stack elements are removed.
 
-For compatibility reasons,
-this function may close slots marked as to-be-closed @see{lua_toclose},
-and therefore it can run arbitrary code.
-You should not rely on this behavior:
-Instead, always close to-be-closed slots explicitly,
-with @Lid{lua_closeslot}, before removing them from the stack.
+This function can run arbitrary code when removing an index
+marked as to-be-closed from the stack.
 
 }
 
@@ -4347,19 +4350,22 @@ otherwise, returns @id{NULL}.
 @apii{0,0,m}
 
 Marks the given index in the stack as a
-to-be-closed @Q{variable} @see{to-be-closed}.
+to-be-closed slot @see{to-be-closed}.
 Like a to-be-closed variable in Lua,
-the value at that index in the stack will be closed
+the value at that slot in the stack will be closed
 when it goes out of scope.
 Here, in the context of a C function,
 to go out of scope means that the running function returns to Lua,
-there is an error,
+or there is an error,
+or the slot is removed from the stack through
+@Lid{lua_settop} or @Lid{lua_pop},
 or there is a call to @Lid{lua_closeslot}.
-An index marked as to-be-closed should neither be removed from the stack
-nor modified before a corresponding call to @Lid{lua_closeslot}.
+A slot marked as to-be-closed should not be removed from the stack
+by any other function in the API except @Lid{lua_settop} or @Lid{lua_pop},
+unless previously deactivated by @Lid{lua_closeslot}.
 
 This function should not be called for an index
-that is equal to or below an active to-be-closed index.
+that is equal to or below an active to-be-closed slot.
 
 Note that, both in case of errors and of a regular return,
 by the time the @idx{__close} metamethod runs,
@@ -4686,7 +4692,10 @@ information about a function or an activation record.
 @Lid{lua_getstack} fills only the private part
 of this structure, for later use.
 To fill the other fields of @Lid{lua_Debug} with useful information,
-you must call @Lid{lua_getinfo}.
+you must call @Lid{lua_getinfo} with an appropriate parameter.
+(Specifically, to get a field,
+you must add the letter between parentheses in the field's comment
+to the parameter @id{what} of @Lid{lua_getinfo}.)
 
 The fields of @Lid{lua_Debug} have the following meaning:
 @description{
@@ -4839,18 +4848,29 @@ printf("%d\n", ar.linedefined);
 
 Each character in the string @id{what}
 selects some fields of the structure @id{ar} to be filled or
-a value to be pushed on the stack:
+a value to be pushed on the stack.
+(These characters are also documented in the declaration of
+the structure @Lid{lua_Debug},
+between parentheses in the comments following each field.)
 @description{
 
-@item{@Char{n}| fills in the field @id{name} and @id{namewhat};
+@item{@Char{f}|
+pushes onto the stack the function that is
+running at the given level;
+}
+
+@item{@Char{l}| fills in the field @id{currentline};
+}
+
+@item{@Char{n}| fills in the fields @id{name} and @id{namewhat};
+}
+
+@item{@Char{r}| fills in the fields @id{ftransfer} and @id{ntransfer};
 }
 
 @item{@Char{S}|
 fills in the fields @id{source}, @id{short_src},
 @id{linedefined}, @id{lastlinedefined}, and @id{what};
-}
-
-@item{@Char{l}| fills in the field @id{currentline};
 }
 
 @item{@Char{t}| fills in the field @id{istailcall};
@@ -4860,21 +4880,13 @@ fills in the fields @id{source}, @id{short_src},
 @id{nups}, @id{nparams}, and @id{isvararg};
 }
 
-@item{@Char{f}|
-pushes onto the stack the function that is
-running at the given level;
-}
-
 @item{@Char{L}|
-pushes onto the stack a table whose indices are the
-numbers of the lines that are valid on the function.
-(A @emph{valid line} is a line with some associated code,
-that is, a line where you can put a break point.
-Non-valid lines include empty lines and comments.)
-
+pushes onto the stack a table whose indices are
+the lines on the function with some associated code,
+that is, the lines where you can put a break point.
+(Lines with no code include empty lines and comments.)
 If this option is given together with option @Char{f},
 its table is pushed after the function.
-
 This is the only option that can raise a memory error.
 }
 
@@ -5145,7 +5157,7 @@ Adds the byte @id{c} to the buffer @id{B}
 @APIEntry{
 const void luaL_addgsub (luaL_Buffer *B, const char *s,
                          const char *p, const char *r);|
-@apii{0,0,m}
+@apii{?,?,m}
 
 Adds a copy of the string @id{s} to the buffer @id{B} @seeC{luaL_Buffer},
 replacing any occurrence of the string @id{p}
@@ -5182,7 +5194,7 @@ to the buffer @id{B}
 }
 
 @APIEntry{void luaL_addvalue (luaL_Buffer *B);|
-@apii{1,?,m}
+@apii{?,?,m}
 
 Adds the value on the top of the stack
 to the buffer @id{B}
@@ -5305,7 +5317,7 @@ Note that any addition to the buffer may invalidate this address.
 }
 
 @APIEntry{void luaL_buffinit (lua_State *L, luaL_Buffer *B);|
-@apii{0,0,-}
+@apii{0,?,-}
 
 Initializes a buffer @id{B}
 @seeC{luaL_Buffer}.
@@ -5331,7 +5343,7 @@ Equivalent to the sequence
 }
 
 @APIEntry{void luaL_buffsub (luaL_Buffer *B, int n);|
-@apii{0,0,-}
+@apii{?,?,-}
 
 Removes @id{n} bytes from the the buffer @id{B}
 @seeC{luaL_Buffer}.
@@ -5916,6 +5928,9 @@ previously pushed on the stack
 on top of the library table.
 These values are popped from the stack after the registration.
 
+A function with a @id{NULL} value represents a placeholder,
+which is filled with @false.
+
 }
 
 @APIEntry{void luaL_setmetatable (lua_State *L, const char *tname);|
@@ -6217,6 +6232,8 @@ A zero means to not change that value.
 See @See{GC} for more details about garbage collection
 and some of these options.
 
+This function should not be called by a finalizer.
+
 }
 
 @LibEntry{dofile ([filename])|
@@ -6231,7 +6248,7 @@ to its caller.
 }
 
 @LibEntry{error (message [, level])|
-Raises an error @see{error} with @{message} as the error object.
+Raises an error @see{error} with @id{message} as the error object.
 This function never returns.
 
 Usually, @id{error} adds some information about the error position
@@ -6363,9 +6380,8 @@ The order in which the indices are enumerated is not specified,
 (To traverse a table in numerical order,
 use a numerical @Rw{for}.)
 
-The behavior of @id{next} is undefined if,
-during the traversal,
-you assign any value to a non-existent field in the table.
+You should not assign any value to a non-existent field in a table
+during its traversal.
 You may however modify existing fields.
 In particular, you may set existing fields to nil.
 
@@ -6398,7 +6414,7 @@ This means that any error @N{inside @T{f}} is not propagated;
 instead, @id{pcall} catches the error
 and returns a status code.
 Its first result is the status code (a boolean),
-which is true if the call succeeds without errors.
+which is @true if the call succeeds without errors.
 In such case, @id{pcall} also returns all results from the call,
 after this first result.
 In case of any error, @id{pcall} returns @false plus the error object.
@@ -6604,7 +6620,7 @@ an object with type @T{"thread"}.
 
 @LibEntry{coroutine.isyieldable ([co])|
 
-Returns true when the coroutine @id{co} can yield.
+Returns @true when the coroutine @id{co} can yield.
 The default for @id{co} is the running coroutine.
 
 A coroutine is yieldable if it is not the main thread and
@@ -6636,7 +6652,7 @@ If there is any error,
 @LibEntry{coroutine.running ()|
 
 Returns the running coroutine plus a boolean,
-true when the running coroutine is the main one.
+@true when the running coroutine is the main one.
 
 }
 
@@ -6731,7 +6747,7 @@ If the loader returns any non-nil value,
 @id{require} assigns the returned value to @T{package.loaded[modname]}.
 If the loader does not return a non-nil value and
 has not assigned any value to @T{package.loaded[modname]},
-then @id{require} assigns @Rw{true} to this entry.
+then @id{require} assigns @true to this entry.
 In any case, @id{require} returns the
 final value of @T{package.loaded[modname]}.
 Besides that value, @id{require} also returns as a second result
@@ -7052,7 +7068,7 @@ otherwise, it returns @fail.
 A third, optional numeric argument @id{init} specifies
 where to start the search;
 its default value @N{is 1} and can be negative.
-A value of @true as a fourth, optional argument @id{plain}
+A @true as a fourth, optional argument @id{plain}
 turns off the pattern matching facilities,
 so the function does a plain @Q{find substring} operation,
 with no characters in @id{pattern} being considered magic.
@@ -7071,8 +7087,10 @@ following the description given in its first argument,
 which must be a string.
 The format string follows the same rules as the @ANSI{sprintf}.
 The only differences are that the conversion specifiers and modifiers
-@T{*}, @id{h}, @id{L}, @id{l}, and @id{n} are not supported
+@id{F}, @id{n}, @T{*}, @id{h}, @id{L}, and @id{l} are not supported
 and that there is an extra specifier, @id{q}.
+Both width and precision, when present,
+are limited to two digits.
 
 The specifier @id{q} formats booleans, nil, numbers, and strings
 in a way that the result is a valid constant in Lua source code.
@@ -7092,7 +7110,7 @@ may produce the string:
 "a string with \"quotes\" and \
  new line"
 }
-This specifier does not support modifiers (flags, width, length).
+This specifier does not support modifiers (flags, width, precision).
 
 The conversion specifiers
 @id{A}, @id{a}, @id{E}, @id{e}, @id{f},
@@ -8078,7 +8096,7 @@ or @fail if @id{x} is not a number.
 @LibEntry{math.ult (m, n)|
 
 Returns a boolean,
-true if and only if integer @id{m} is below integer @id{n} when
+@true if and only if integer @id{m} is below integer @id{n} when
 they are compared as @x{unsigned integers}.
 
 }
@@ -8491,13 +8509,13 @@ When called without a @id{command},
 @LibEntry{os.exit ([code [, close]])|
 
 Calls the @ANSI{exit} to terminate the host program.
-If @id{code} is @Rw{true},
+If @id{code} is @true,
 the returned status is @idx{EXIT_SUCCESS};
-if @id{code} is @Rw{false},
+if @id{code} is @false,
 the returned status is @idx{EXIT_FAILURE};
 if @id{code} is a number,
 the returned status is this number.
-The default value for @id{code} is @Rw{true}.
+The default value for @id{code} is @true.
 
 If the optional second argument @id{close} is true,
 closes the Lua state before exiting.
@@ -9094,7 +9112,7 @@ want the old behavior
 }
 
 @item{
-The use of the @idx{__lt} metamethod to emulate @id{__le}
+The use of the @idx{__lt} metamethod to emulate @idx{__le}
 has been removed.
 When needed, this metamethod must be explicitly defined.
 }
@@ -9130,7 +9148,7 @@ like any other error when calling a finalizer.)
 The function @Lid{print} does not call @Lid{tostring}
 to format its arguments;
 instead, it has this functionality hardwired.
-You should use @id{__tostring} to modify how values are printed.
+You should use @idx{__tostring} to modify how values are printed.
 }
 
 @item{

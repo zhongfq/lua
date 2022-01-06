@@ -26,7 +26,7 @@ end
 
 local function checkmessage (prog, msg, debug)
   local m = doit(prog)
-  if debug then print(m) end
+  if debug then print(m, msg) end
   assert(string.find(m, msg, 1, true))
 end
 
@@ -191,6 +191,13 @@ checkmessage("a = 24 // 0", "divide by zero")
 checkmessage("a = 1 % 0", "'n%0'")
 
 
+-- type error for an object which is neither in an upvalue nor a register.
+-- The following code will try to index the value 10 that is stored in
+-- the metatable, without moving it to a register.
+checkmessage("local a = setmetatable({}, {__index = 10}).x",
+             "attempt to index a number value")
+
+
 -- numeric for loops
 checkmessage("for i = {}, 10 do end", "table")
 checkmessage("for i = io.stdin, 10 do end", "FILE")
@@ -221,6 +228,22 @@ do   -- named objects (field '__name')
   checkmessage("return {} < XX", "table with My Type")
   checkmessage("return XX < io.stdin", "My Type with FILE*")
   _G.XX = nil
+
+  if T then   -- extra tests for 'luaL_tolstring'
+    -- bug in 5.4.3; 'luaL_tolstring' with negative indices
+    local x = setmetatable({}, {__name="TABLE"})
+    assert(T.testC("Ltolstring -1; return 1", x) == tostring(x))
+
+    local a, b = T.testC("pushint 10; Ltolstring -2; return 2", x)
+    assert(a == 10 and b == tostring(x))
+
+    setmetatable(x, {__tostring=function (o)
+      assert(o == x)
+      return "ABC"
+    end})
+    local a, b, c = T.testC("pushint 10; Ltolstring -2; return 3", x)
+    assert(a == x and b == 10 and c == "ABC")
+  end
 end
 
 -- global functions
@@ -282,7 +305,7 @@ end]], "global 'insert'")
 
 checkmessage([[  -- tail call
   return math.sin("a")
-]], "'sin'")
+]], "sin")
 
 checkmessage([[collectgarbage("nooption")]], "invalid option")
 
@@ -412,6 +435,14 @@ if not b then
     end
   end
 end]], 5)
+
+do
+  -- Force a negative estimate for base line. Error in instruction 2
+  -- (after VARARGPREP, GETGLOBAL), with first absolute line information
+  -- (forced by too many lines) in instruction 0.
+  local s = string.format("%s return __A.x", string.rep("\n", 300))
+  lineerror(s, 301)
+end
 
 
 if not _soft then

@@ -121,6 +121,7 @@ static void warnf (void *ud, const char *msg, int tocont) {
   strcat(buff, msg);  /* add new message to current warning */
   if (!tocont) {  /* message finished? */
     lua_unlock(L);
+    luaL_checkstack(L, 1, "warn stack space");
     lua_getglobal(L, "_WARN");
     if (!lua_toboolean(L, -1))
       lua_pop(L, 1);  /* ok, no previous unexpected warning */
@@ -142,6 +143,7 @@ static void warnf (void *ud, const char *msg, int tocont) {
       }
       case 2: {  /* store */
         lua_unlock(L);
+        luaL_checkstack(L, 1, "warn stack space");
         lua_pushstring(L, buff);
         lua_setglobal(L, "_WARN");  /* assign message to global '_WARN' */
         lua_lock(L);
@@ -1740,6 +1742,9 @@ static struct X { int x; } x;
       const char *s1 = lua_pushstring(L1, s);
       (void)s1;  /* to avoid warnings */
       lua_longassert((s == NULL && s1 == NULL) || strcmp(s, s1) == 0);
+    }
+    else if EQ("Ltolstring") {
+      luaL_tolstring(L1, getindex, NULL);
     }
     else if EQ("type") {
       lua_pushstring(L1, luaL_typename(L1, getnum));
