@@ -77,7 +77,7 @@ else()
 endif()
 
 set_target_properties(liblua PROPERTIES OUTPUT_NAME lua)
-target_include_directories(liblua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_include_directories(liblua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(lua lua.c)
 target_link_libraries(lua liblua)
