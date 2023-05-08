@@ -70,6 +70,12 @@
 #endif
 
 
+#if defined(LUA_USE_IOS)
+#define LUA_USE_POSIX
+#define LUA_USE_DLOPEN
+#endif
+
+
 /*
 @@ LUAI_IS32INT is true iff 'int' has (at least) 32 bits.
 */
@@ -747,14 +753,15 @@
 
 /*
 @@ LUA_IDSIZE gives the maximum size for the description of the source
-@@ of a function in debug information.
+** of a function in debug information.
 ** CHANGE it if you want a different size.
 */
 #define LUA_IDSIZE	60
 
 
 /*
-@@ LUAL_BUFFERSIZE is the buffer size used by the lauxlib buffer system.
+@@ LUAL_BUFFERSIZE is the initial buffer size used by the lauxlib
+** buffer system.
 */
 #define LUAL_BUFFERSIZE   ((int)(16 * sizeof(void*) * sizeof(lua_Number)))
 
