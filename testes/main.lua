@@ -137,7 +137,7 @@ RUN('env LUA_INIT= LUA_PATH=x lua %s > %s', prog, out)
 checkout("x\n")
 
 -- test LUA_PATH_version
-RUN('env LUA_INIT= LUA_PATH_5_4=y LUA_PATH=x lua %s > %s', prog, out)
+RUN('env LUA_INIT= LUA_PATH_5_5=y LUA_PATH=x lua %s > %s', prog, out)
 checkout("y\n")
 
 -- test LUA_CPATH
@@ -146,7 +146,7 @@ RUN('env LUA_INIT= LUA_CPATH=xuxu lua %s > %s', prog, out)
 checkout("xuxu\n")
 
 -- test LUA_CPATH_version
-RUN('env LUA_INIT= LUA_CPATH_5_4=yacc LUA_CPATH=x lua %s > %s', prog, out)
+RUN('env LUA_INIT= LUA_CPATH_5_5=yacc LUA_CPATH=x lua %s > %s', prog, out)
 checkout("yacc\n")
 
 -- test LUA_INIT (and its access to 'arg' table)
@@ -156,7 +156,7 @@ checkout("3.2\n")
 
 -- test LUA_INIT_version
 prepfile("print(X)")
-RUN('env LUA_INIT_5_4="X=10" LUA_INIT="X=3" lua %s > %s', prog, out)
+RUN('env LUA_INIT_5_5="X=10" LUA_INIT="X=3" lua %s > %s', prog, out)
 checkout("10\n")
 
 -- test LUA_INIT for files
@@ -312,7 +312,7 @@ setmetatable({}, {__gc = function ()
   -- this finalizer should not be called, as object will be
   -- created after 'lua_close' has been called
   setmetatable({}, {__gc = function () print(3) end})
-  print(collectgarbage())    -- cannot call collector here
+  print(collectgarbage() or false)    -- cannot call collector here
   os.exit(0, true)
 end})
 ]]
@@ -322,7 +322,7 @@ creating 1
 creating 2
 2
 creating 3
-nil
+false
 1
 ]]
 
